@@ -3,6 +3,7 @@ import type {
   SpeechModuleState,
   RecognizedEvent,
   StateChangeEvent,
+  SpeechResponse,
 } from './index';
 import VoiceRecognizer, { ErrorEvent, Options, SpeechEvent } from './index';
 import type { EmitterSubscription } from 'react-native';
@@ -11,7 +12,7 @@ let recognizeChannel = 1;
 /**
  *   Get current module state and subsequent updates
  */
-const useModuleState = () => {
+const useVoiceRecognizerState = () => {
   const [state, setState] = useState<SpeechModuleState>('NONE');
 
   useEffect(() => {
@@ -64,30 +65,11 @@ const useVoiceRecognizerEvent = (
   }, [event]);
 };
 
-const useModuleStateChanges = (handler: (event: SpeechModuleState) => void) => {
-  useVoiceRecognizerEvent('onModuleStateChange', ({ state }) => {
-    handler(state);
-  });
-  useEffect(() => {
-    let didCancel = false;
-    const updateState = async () => {
-      const moduleState = await VoiceRecognizer.getState();
-      if (!didCancel) {
-        handler(moduleState);
-      }
-    };
-    updateState();
-    return () => {
-      didCancel = true;
-    };
-  }, [handler]);
-};
-
 const useVoiceRecognizer = (textToScore?: string, options?: Options) => {
   const _channel = useRef(recognizeChannel++);
   const [state, setState] = useState<SpeechModuleState>('NONE');
   const [audioFile, setAudioFile] = useState<string | null>(null);
-  const [response, setSpeechResponse] = useState<any | null>(null);
+  const [response, setSpeechResponse] = useState<SpeechResponse | null>(null);
 
   useEffect(() => {
     let didCancel = false;
@@ -114,8 +96,8 @@ const useVoiceRecognizer = (textToScore?: string, options?: Options) => {
 
     const recognizeChannelErrorSubscription = VoiceRecognizer.addListener(
       'onError',
-      ({ channel, error }: ErrorEvent) => {
-        if (channel === _channel.current && !didCancel) {
+      (error: ErrorEvent) => {
+        if (error.channel === _channel.current && !didCancel) {
           console.log(error);
           setState('NONE');
         }
@@ -152,9 +134,4 @@ const useVoiceRecognizer = (textToScore?: string, options?: Options) => {
   };
 };
 
-export {
-  useModuleState,
-  useVoiceRecognizerEvent,
-  useModuleStateChanges,
-  useVoiceRecognizer,
-};
+export { useVoiceRecognizerState, useVoiceRecognizerEvent, useVoiceRecognizer };

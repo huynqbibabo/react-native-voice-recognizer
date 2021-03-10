@@ -2,7 +2,7 @@
 #import "RCTConvert.h"
 
 @implementation VoiceRecognizer {
-  NSNumber *_channel;
+    NSNumber *_channel;
 }
 
 RCT_EXPORT_MODULE()
@@ -19,11 +19,11 @@ RCT_EXPORT_MODULE()
     _recordState.mDataFormat.mReserved          = 0;
     _recordState.mDataFormat.mFormatID          = kAudioFormatLinearPCM;
     _recordState.mDataFormat.mFormatFlags       = _recordState.mDataFormat.mBitsPerChannel == 8 ? kLinearPCMFormatFlagIsPacked : (kLinearPCMFormatFlagIsSignedInteger | kLinearPCMFormatFlagIsPacked);
-
+    
     _recordState.bufferByteSize = 2048;
     _recordState.mSelf = self;
     _state = StateNone;
-
+    
     _regex = [NSRegularExpression regularExpressionWithPattern:@"[\\^.?:!,@#\$%&*()_+\\-=\"\\/|\\\\><`~{}\\[\\];]" options:NSRegularExpressionCaseInsensitive error:nil];
     return self;
 }
@@ -43,7 +43,7 @@ RCT_EXPORT_METHOD(getState:(RCTPromiseResolveBlock)resolve rejecter:(__unused RC
 }
 
 RCT_EXPORT_METHOD(start:(nonnull NSNumber *)channel textToScore:(NSString *)textToScore opts:(NSDictionary *)opts resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject) {
-
+    
     if (![_state  isEqual: StateNone]) {
         [self stopRecording];
         [self releaseResouce];
@@ -61,33 +61,33 @@ RCT_EXPORT_METHOD(start:(nonnull NSNumber *)channel textToScore:(NSString *)text
         NSString *modifiedString = [_regex stringByReplacingMatchesInString:textToScore options:0 range:NSMakeRange(0, [textToScore length]) withTemplate:@""];
         _contextualStrings = [modifiedString componentsSeparatedByString: @" "];
         _state = StateRecording;
-
+        
         NSString *fileName = [NSString stringWithFormat:@"%@%@",[[NSProcessInfo processInfo] globallyUniqueString], @".wav"];
         //        NSString *docDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
         _filePath = [NSString stringWithFormat:@"%@", [[self getDirectoryOfTypeSound:NSCachesDirectory] stringByAppendingString:fileName]];
-
+        
         NSLog(@"_filePath: %@", _filePath);
         // most audio players set session category to "Playback", record won't work in this mode
         // therefore set session category to "Record" before recording
         [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:AVAudioSessionCategoryOptionMixWithOthers error:nil];
-
+        
         _recordState.mIsRunning = true;
         _recordState.mCurrentPacket = 0;
-
+        
         CFURLRef url = CFURLCreateWithString(kCFAllocatorDefault, (CFStringRef)_filePath, NULL);
         AudioFileCreateWithURL(url, kAudioFileWAVEType, &_recordState.mDataFormat, kAudioFileFlags_EraseFile, &_recordState.mAudioFile);
         CFRelease(url);
-
+        
         AudioQueueNewInput(&_recordState.mDataFormat, onInputBuffer, &_recordState, NULL, NULL, 0, &_recordState.mQueue);
         for (int i = 0; i < kNumberBuffers; i++) {
             AudioQueueAllocateBuffer(_recordState.mQueue, _recordState.bufferByteSize, &_recordState.mBuffers[i]);
             AudioQueueEnqueueBuffer(_recordState.mQueue, _recordState.mBuffers[i], 0, NULL);
         }
         AudioQueueStart(_recordState.mQueue, NULL);
-
+        
         resolve(@{});
         [self sendEventWithName:@"onModuleStateChange" body:[NSDictionary dictionaryWithObjectsAndKeys: _state,@"state", channel, @"channel", nil]];
-
+        
     }
     @catch (NSException * e) {
         reject(@"-1", e.reason, nil);
@@ -96,10 +96,10 @@ RCT_EXPORT_METHOD(start:(nonnull NSNumber *)channel textToScore:(NSString *)text
 }
 
 RCT_EXPORT_METHOD(stop:(nonnull NSNumber *)channel resolve:(RCTPromiseResolveBlock)resolve rejecter:(__unused RCTPromiseRejectBlock)reject) {
-    @try {
+    if ([_state  isEqual: StateRecording]) {
         _channel = channel;
         [self stopRecording];
-
+        
         resolve(@{});
         if (_filePath != nil) {
             [self transcribeFile];
@@ -107,11 +107,10 @@ RCT_EXPORT_METHOD(stop:(nonnull NSNumber *)channel resolve:(RCTPromiseResolveBlo
             _state = StateNone;
             [self sendEventWithName:@"onModuleStateChange" body:[NSDictionary dictionaryWithObjectsAndKeys: _state,@"state", channel, @"channel", nil]];
         }
+        return;
     }
-    @catch (NSException * e) {
-        reject(@"-1", e.reason, nil);
-        [self handleModuleExeption:e];
-    }
+    
+    resolve(@{});
 }
 
 RCT_EXPORT_METHOD(cancel:(nonnull NSNumber *)channel resolve:(RCTPromiseResolveBlock)resolve rejecter:(__unused RCTPromiseRejectBlock)reject) {
@@ -133,7 +132,7 @@ RCT_EXPORT_METHOD(release:(RCTPromiseResolveBlock)resolve rejecter:(__unused RCT
         NSError *error;
         [[NSFileManager defaultManager] removeItemAtPath:[self getDirectoryOfTypeSound:NSCachesDirectory] error:&error];
         NSLog(@"%@", error);
-
+        
         resolve(@"");
     }
 }
@@ -155,7 +154,7 @@ RCT_EXPORT_METHOD(isSpeechAvailable:(RCTPromiseResolveBlock)resolve rejecter:(__
         [self handleModuleExeption:[NSException exceptionWithName:@"file error" reason:@"There no audio file to score!" userInfo:nil]];
         return;
     }
-
+    
     _state = StateRecognizing;
     NSDictionary *payload = [NSDictionary dictionaryWithObjectsAndKeys: _state,@"state", _channel, @"channel", nil];
     [self sendEventWithName:@"onModuleStateChange" body:payload];
@@ -170,38 +169,59 @@ RCT_EXPORT_METHOD(isSpeechAvailable:(RCTPromiseResolveBlock)resolve rejecter:(__
         } else {
             _speechRecognizer = [[SFSpeechRecognizer alloc] init];
         }
-
+        
         _speechRecognizer.delegate = self;
-
+        
         NSURL *audioFileURL = [NSURL fileURLWithPath:_filePath];
-
+        
         _recognitionRequest = [[SFSpeechURLRecognitionRequest alloc] initWithURL:audioFileURL];
         _recognitionRequest.shouldReportPartialResults = YES;
         //        _recognitionRequest.contextualStrings = _contextualStrings;
         //        _recognitionRequest.taskHint = SFSpeechRecognitionTaskHintDictation;
-
+        
         _recognitionTask = [self.speechRecognizer recognitionTaskWithRequest:self.recognitionRequest resultHandler:^(SFSpeechRecognitionResult * _Nullable result, NSError * _Nullable error) {
-
+            
             if (error != nil) {
                 NSString *errorMessage = [NSString stringWithFormat:@"%ld/%@", (long)error.code, [error localizedDescription]];
                 [self handleModuleExeption:[NSException exceptionWithName:@"RecognitionTask Exception" reason:errorMessage userInfo:@{}]];
                 [self teardown];
                 return;
             }
-
+            
             BOOL isFinal = result.isFinal;
-
+            
             //            [self sendResult :nil :result.bestTranscription.formattedString :transcriptionDics :[NSNumber numberWithBool:isFinal]];
             // || self.recognitionTask.isCancelled || self.recognitionTask.isFinishing
             if (isFinal) {
+                NSString *status = @"success";
+                NSString *fidelityClass = @"CORRECT";
+                
                 NSMutableArray* transcripts = [NSMutableArray new];
                 NSMutableArray* transcriptionDics = [NSMutableArray new];
                 for (SFTranscription* transcription in result.transcriptions) {
-                    [transcripts addObject:transcription.formattedString];
-                    [transcriptionDics addObject:[self toArrayWithDuplicateWordsCount:transcription.formattedString]];
+                    if (transcription.formattedString) {
+                        [transcripts addObject:transcription.formattedString];
+                        [transcriptionDics addObject:[self toArrayWithDuplicateWordsCount:transcription.formattedString]];
+                    }
+                }
+                NSMutableDictionary *response = [[NSMutableDictionary alloc] init];
+                
+                NSMutableDictionary *event = [[NSMutableDictionary alloc] init];
+                [event setValue:self->_filePath forKey:@"filePath"];
+                [event setValue:self->_channel forKey:@"channel"];
+                
+                if (!transcripts) {
+                    status = @"error_no_speech";
+                    fidelityClass = @"NO_SPEECH";
+                    [response setValue:status forKey:@"status"];
+                    [event setObject:response forKey:@"response"];
+                    [self teardown];
+                    [self sendEventWithName:@"onSpeechRecognized" body:event];
+                    [self emitModuleStateChangeEvent:StateNone];
+                    return;
                 }
                 NSArray *contextualDicts = [self toArrayWithDuplicateWordsCount:self->_textualString];
-
+                
                 NSMutableArray *wordScoreList = [NSMutableArray new];
                 NSInteger summaryQualityScore = 0;
                 //                NSMutableString *transcript = [NSMutableString new];
@@ -211,31 +231,36 @@ RCT_EXPORT_METHOD(isSpeechAvailable:(RCTPromiseResolveBlock)resolve rejecter:(__
                         [wordScoreDic addObject:[self getMostSimilarWordByLevenshteinDistance:word transcriptionDic:transcriptionDic]];
                     }
                     NSDictionary *wordScore = [self getWordByHighestScoreL:word wordScoreDic:wordScoreDic];
-
+                    
                     summaryQualityScore = summaryQualityScore + [wordScore[@"percentageOfTextMatch"] intValue];
                     //                    [transcript appendString:[NSString stringWithFormat:@"%@ ", wordScore[@"transcript"]]];
                     //                    [wordScoreList addObject:@{@"word": wordScore[@"word"], @"qualityScore": wordScore[@"percentageOfTextMatch"], @"levenshteinScore": wordScore[@"levenshteinDistance"]}];
                     [wordScoreList addObject:[NSDictionary dictionaryWithObjectsAndKeys:word[@"letters"], @"word", wordScore[@"percentageOfTextMatch"], @"qualityScore", wordScore[@"levenshteinDistance"], @"levenshteinScore", nil]];
-
+                    
                 }
-
+                
                 long qualityScore = (summaryQualityScore / [wordScoreList count]);
-                NSMutableDictionary *response = [[NSMutableDictionary alloc] init];
-                [response setValue:self->_textualString forKey:@"text"];
-                [response setValue:@"CORRECT" forKey:@"fidelityClass"];
-                [response setValue:[NSNumber numberWithLong:qualityScore] forKey:@"qualityScore"];
-                [response setValue:transcripts forKey:@"transcripts"];
-                [response setObject:wordScoreList forKey:@"wordScoreList"];
-
-                NSMutableDictionary *resultDict = [[NSMutableDictionary alloc] init];
-                [resultDict setValue:self->_filePath forKey:@"filePath"];
-                [resultDict setValue:self->_channel forKey:@"channel"];
-                [resultDict setObject:response forKey:@"response"];
-
+                if (qualityScore <= 10 ) {
+                    fidelityClass = @"FREE_SPEAK";
+                }
+                if (qualityScore > 10 && qualityScore <= 30 ) {
+                    fidelityClass = @"INCOMPLETE";
+                }
+                NSMutableDictionary *textScore = [[NSMutableDictionary alloc] init];
+                [textScore setValue:self->_textualString forKey:@"text"];
+                [textScore setValue:fidelityClass forKey:@"fidelityClass"];
+                [textScore setValue:[NSNumber numberWithLong:qualityScore] forKey:@"qualityScore"];
+                [textScore setValue:transcripts forKey:@"transcripts"];
+                [textScore setObject:wordScoreList forKey:@"wordScoreList"];
+                
+                [response setValue:textScore forKey:@"textScore"];
+                [response setValue:status forKey:@"status"];
+                [event setObject:response forKey:@"response"];
+                
                 [self teardown];
-                [self sendEventWithName:@"onSpeechRecognized" body:resultDict];
+                [self sendEventWithName:@"onSpeechRecognized" body:event];
                 [self emitModuleStateChangeEvent:StateNone];
-
+                
                 return;
             }
         }];
@@ -248,50 +273,50 @@ RCT_EXPORT_METHOD(isSpeechAvailable:(RCTPromiseResolveBlock)resolve rejecter:(__
     self.isTearingDown = YES;
     [self.recognitionTask cancel];
     self.recognitionTask = nil;
-
+    
     // Set back audio session category
-
+    
     // End recognition request
     //    [self.recognitionRequest endAudio];
-
+    
     // Remove tap on bus
     [self.audioEngine.inputNode removeTapOnBus:0];
     [self.audioEngine.inputNode reset];
-
+    
     // Stop audio engine and dereference it for re-allocation
     if (self.audioEngine.isRunning) {
         [self.audioEngine stop];
         [self.audioEngine reset];
         self.audioEngine = nil;
     }
-
+    
     self.recognitionRequest = nil;
     self.sessionId = nil;
     self.isTearingDown = NO;
 }
 
 void onInputBuffer(void *inUserData,
-                       AudioQueueRef inAQ,
-                       AudioQueueBufferRef inBuffer,
-                       const AudioTimeStamp *inStartTime,
-                       UInt32 inNumPackets,
-                       const AudioStreamPacketDescription *inPacketDesc) {
+                   AudioQueueRef inAQ,
+                   AudioQueueBufferRef inBuffer,
+                   const AudioTimeStamp *inStartTime,
+                   UInt32 inNumPackets,
+                   const AudioStreamPacketDescription *inPacketDesc) {
     AQRecordState* pRecordState = (AQRecordState *)inUserData;
-
+    
     if (!pRecordState->mIsRunning) {
         return;
     }
-
+    
     if (AudioFileWritePackets(pRecordState->mAudioFile, false, inBuffer->mAudioDataByteSize, inPacketDesc, pRecordState->mCurrentPacket, &inNumPackets, inBuffer->mAudioData) == noErr) {
         pRecordState->mCurrentPacket += inNumPackets;
     }
-
+    
     short *samples = (short *) inBuffer->mAudioData;
     long nsamples = inBuffer->mAudioDataByteSize;
     //    NSData *data = [NSData dataWithBytes:samples length:nsamples];
-
+    
     [pRecordState->mSelf sendEventWithName:@"onVoice" body:[NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithShort:*samples],@"size", [NSNumber numberWithLong:(long) nsamples], @"length", nil]];
-
+    
     AudioQueueEnqueueBuffer(pRecordState->mQueue, inBuffer, 0, NULL);
 }
 
@@ -307,7 +332,7 @@ void onInputBuffer(void *inUserData,
         if ([self->_state  isEqual: StateRecording]) {
             [self stopRecording];
             [self releaseResouce];
-
+            
             self->_state = StateNone;
             [self sendEventWithName:@"onModuleStateChange" body:[NSDictionary dictionaryWithObjectsAndKeys:self->_state,@"state", self->_channel, @"channel", nil]];
         }
@@ -361,7 +386,7 @@ void onInputBuffer(void *inUserData,
     for (NSDictionary *transcription in transcriptionDic) {
         [wordDics addObject:[self scoreByLevenshteinDistance:word right:transcription]];
     }
-
+    
     return [self getWordByHighestScoreL:word wordScoreDic:wordDics];
 }
 
@@ -378,7 +403,8 @@ void onInputBuffer(void *inUserData,
         if (
             [word[@"levenshteinDistance"] doubleValue] <= [wordScore[@"levenshteinDistance"] doubleValue] &&
             [word[@"percentageOfTextMatch"] doubleValue] >= [wordScore[@"percentageOfTextMatch"] doubleValue] &&
-            [word[@"word"] length] > [word[@"levenshteinDistance"] intValue]
+            [word[@"word"] length] > [word[@"levenshteinDistance"] intValue] &&
+            ([word[@"levenshteinDistance"] intValue] / [word[@"word"] length]) * 100 <= 100/3
             ) {
             wordScore = word;
         }
@@ -389,7 +415,7 @@ void onInputBuffer(void *inUserData,
 - (NSDictionary *) scoreByLevenshteinDistance:(NSDictionary *)left right:(NSDictionary *)right
 {
     NSUInteger levenshteinDistance = [[left valueForKey:@"word"] mdc_damerauLevenshteinDistanceTo:[right valueForKey:@"word"]];
-
+    
     return @{
         @"word": [left valueForKey:@"letters"],
         @"transcript": [right valueForKey:@"word"],
@@ -399,11 +425,11 @@ void onInputBuffer(void *inUserData,
 }
 
 - (NSArray<NSDictionary *> *) toArrayWithDuplicateWordsCount:(NSString *)text {
-
+    
     NSString *modifiedString = [_regex stringByReplacingMatchesInString:text options:0 range:NSMakeRange(0, [text length]) withTemplate:@""];
     NSMutableArray* transcriptionDics = [NSMutableArray new];
     NSArray *words = [modifiedString componentsSeparatedByString: @" "];
-
+    
     for( int i = 0; i < [words count]; i++)
     {
         NSString *word = [words[i] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
@@ -415,7 +441,7 @@ void onInputBuffer(void *inUserData,
 - (NSNumber *) percentageOfTextMatch:(NSString*)left right:(NSString*)right {
     NSString *s0 = [left stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
     NSString *s1 = [right stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-
+    
     NSInteger distance = [s0 mdc_damerauLevenshteinDistanceTo:s1];
     NSInteger percent = (100 - (int)distance * 100 / ([s0 length] + [s1 length]));
     return [NSNumber numberWithLong:percent];

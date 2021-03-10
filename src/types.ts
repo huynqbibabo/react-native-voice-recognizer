@@ -36,6 +36,11 @@ export interface TextScore {
   transcripts?: string[];
 }
 
+export interface SpeechResponse {
+  status: string;
+  textScore?: TextScore;
+}
+
 export type SpeechEvents = {
   onVoiceStart?: () => void;
   onVoice?: (e: VoiceEvent) => void;
@@ -54,7 +59,7 @@ export interface ChannelSubscription {
 
 export interface RecognizedEvent extends ChannelSubscription {
   filePath: string;
-  response: TextScore;
+  response: SpeechResponse;
 }
 
 export interface VoiceStartEvent extends ChannelSubscription {}

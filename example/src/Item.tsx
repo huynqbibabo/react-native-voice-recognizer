@@ -42,8 +42,8 @@ export const Item = (props: Props) => {
         </View>
         <View>
           <View style={styles.result}>
-            {response?.wordScoreList && (
-              <WordHighlight words={response?.wordScoreList} />
+            {response?.textScore?.wordScoreList && (
+              <WordHighlight words={response?.textScore?.wordScoreList} />
             )}
           </View>
         </View>
@@ -55,7 +55,7 @@ export const Item = (props: Props) => {
     audioFile,
     cancel,
     props.text,
-    response?.wordScoreList,
+    response?.textScore?.wordScoreList,
     start,
     state,
     stop,

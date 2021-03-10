@@ -17,8 +17,8 @@ internal class Levenshtein(sentenceToScore: String, transcripts: ReadableArray) 
     }
   }
 
-  fun scoreSentence(): MutableList<LevenshteinWord> {
-    val sentenceScoreList = mutableListOf<LevenshteinWord>()
+  fun scoreSentence(): MutableList<WordScore> {
+    val sentenceScoreList = mutableListOf<WordScore>()
     for (i in sentencesToScore.text.indices) {
       val wordsScore = mutableListOf<WordScore>()
       for (j in results.indices) {
@@ -26,7 +26,7 @@ internal class Levenshtein(sentenceToScore: String, transcripts: ReadableArray) 
         wordsScore.add(word)
       }
       val highestScore = getWordByHighestScore(sentencesToScore.text[i], wordsScore)
-      sentenceScoreList.add(LevenshteinWord(highestScore, i))
+      sentenceScoreList.add(highestScore)
     }
     return sentenceScoreList
   }
@@ -41,12 +41,13 @@ internal class Levenshtein(sentenceToScore: String, transcripts: ReadableArray) 
   }
 
   private fun getWordByHighestScore(sentence: Word, words: MutableList<WordScore>): WordScore {
-    var wordScore = WordScore(sentence.letters, "", sentence.word.length, 0)
+    var wordScore = WordScore(sentence.word, sentence.letters, "", sentence.word.length, 0)
     for (word in words) {
       if (
         word.levenshteinDistance <= wordScore.levenshteinDistance &&
         word.percentageOfTextMatch >= wordScore.percentageOfTextMatch &&
-        word.word.length > word.levenshteinDistance
+        word.word.length > word.levenshteinDistance &&
+        (word.levenshteinDistance / word.transcript.length) * 100 <= 100 / 3
       ) {
         wordScore = word
       }
@@ -61,7 +62,7 @@ internal class Levenshtein(sentenceToScore: String, transcripts: ReadableArray) 
     val levenshteinScore = levenshteinDistance(sentence.word, word.word)
     val score = percentageOfTextMatch(sentence.word, word.word)
     Log.i(TAG, "word: ${sentence.word}, transcript: ${word.word} levenshteinScore: $levenshteinScore, qualityScore: $score")
-    return WordScore(sentence.letters, word.word, levenshteinScore, score)
+    return WordScore(sentence.word, sentence.letters, word.word, levenshteinScore, score)
   }
 
   /**
@@ -257,8 +258,7 @@ internal class Levenshtein(sentenceToScore: String, transcripts: ReadableArray) 
 
   data class Word(var word: String, var letters: String, var count: Int)
   data class Text(val text: MutableList<Word>, var length: Int)
-  data class WordScore(var word: String, var transcript: String, var levenshteinDistance: Int, var percentageOfTextMatch: Int)
-  data class LevenshteinWord(var wordScore: WordScore?, var positionInWordList: Int)
+  data class WordScore(var word: String, var letters: String, var transcript: String, var levenshteinDistance: Int, var percentageOfTextMatch: Int)
   companion object {
     private const val TAG = "LEVENSHTEIN"
   }

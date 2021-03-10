@@ -18,11 +18,11 @@ import type {
   SpeechEvent,
   TextScore,
   WordScore,
+  SpeechResponse,
 } from './types';
 
 import {
-  useModuleState,
-  useModuleStateChanges,
+  useVoiceRecognizerState,
   useVoiceRecognizerEvent,
   useVoiceRecognizer,
 } from './hooks';
@@ -126,12 +126,8 @@ export type {
   SpeechEvent,
   TextScore,
   WordScore,
+  SpeechResponse,
 };
-export {
-  useModuleState,
-  useModuleStateChanges,
-  useVoiceRecognizerEvent,
-  useVoiceRecognizer,
-};
+export { useVoiceRecognizerState, useVoiceRecognizerEvent, useVoiceRecognizer };
 const VoiceRecognizer = new RNVoiceRecognizer();
 export default VoiceRecognizer;

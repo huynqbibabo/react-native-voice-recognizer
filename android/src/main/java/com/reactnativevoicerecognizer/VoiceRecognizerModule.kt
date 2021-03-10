@@ -122,6 +122,10 @@ class VoiceRecognizerModule(reactContext: ReactApplicationContext) : ReactContex
 
     locale = opts.getString("locale")
     val mainHandler = Handler(reactApplicationContext!!.mainLooper)
+    if (textToScore.isEmpty()) {
+      promise.reject("1", "Can't score with empty string")
+      return
+    }
     mainHandler.post {
       try {
         startListening(opts)
@@ -250,35 +254,64 @@ class VoiceRecognizerModule(reactContext: ReactApplicationContext) : ReactContex
   private fun recognize() {
 //    workingFile?.let { WaveHeaderWriter(it, waveConfig).writeHeader() }
 
-    val levenshteinWordList = Levenshtein(sentence!!, transcripts!!).scoreSentence()
-    Handler(Looper.getMainLooper()).postDelayed({
-      val response: WritableMap = WritableNativeMap()
-      response.putString("text", sentence)
-      response.putString("fidelityClass", "CORRECT")
-      val wordScoreList: WritableArray = WritableNativeArray()
-      var summaryQualityScore = 0
-      for (levenshteinWord in levenshteinWordList) {
-        val wordScore: WritableMap = WritableNativeMap()
-        wordScore.putString("word", levenshteinWord.wordScore?.word)
-        wordScore.putDouble("qualityScore", levenshteinWord.wordScore!!.percentageOfTextMatch.toDouble())
-        wordScore.putDouble("levenshteinScore", levenshteinWord.wordScore!!.levenshteinDistance.toDouble())
-        summaryQualityScore += levenshteinWord.wordScore!!.percentageOfTextMatch
-        wordScoreList.pushMap(wordScore)
-      }
-      response.putArray("transcripts", transcripts)
-      response.putDouble("qualityScore", (summaryQualityScore / levenshteinWordList.size).toDouble())
-      response.putArray("wordScoreList", wordScoreList)
+    val event = Arguments.createMap()
+    var status = "success"
+    var fidelityClass = "CORRECT"
 
-      val event = Arguments.createMap()
-//      event.putString("filePath", workingFile?.absolutePath)
-//      event.putString("filePath", null)
-      event.putMap("response", response)
+    val response: WritableMap = WritableNativeMap()
+    if (transcripts?.toArrayList()?.isEmpty() == true){
+      status = "error_no_speech"
+      fidelityClass = "NO_SPEECH"
+
+      response.putString("status", status)
       event.putDouble("channel", _channel!!)
       sendEvent(moduleEvents.onSpeechRecognized, event)
       state = moduleStates.none
 //      workingFile = null
       transcripts = null
       emitStateChangeEvent()
+      return
+    }
+    Handler(Looper.getMainLooper()).postDelayed({
+      try {
+        val levenshteinWordList = Levenshtein(sentence!!, transcripts!!).scoreSentence()
+        val textScore: WritableMap = WritableNativeMap()
+        textScore.putString("text", sentence)
+        val wordScoreList: WritableArray = WritableNativeArray()
+        var summaryQualityScore = 0
+        for (word in levenshteinWordList) {
+          val wordScore: WritableMap = WritableNativeMap()
+          wordScore.putString("word", word.word)
+          wordScore.putDouble("qualityScore", word.percentageOfTextMatch.toDouble())
+          wordScore.putDouble("levenshteinScore", word.levenshteinDistance.toDouble())
+          summaryQualityScore += word.percentageOfTextMatch
+          wordScoreList.pushMap(wordScore)
+        }
+        val qualityScore = (summaryQualityScore / levenshteinWordList.size).toDouble()
+        if (qualityScore <= 10 ) {
+          fidelityClass = "FREE_SPEAK"
+        }
+        if (qualityScore > 10 && qualityScore <= 30 ) {
+          fidelityClass = "INCOMPLETE"
+        }
+        textScore.putString("fidelityClass", fidelityClass)
+        textScore.putArray("transcripts", transcripts)
+        textScore.putDouble("qualityScore", (summaryQualityScore / levenshteinWordList.size).toDouble())
+        textScore.putArray("wordScoreList", wordScoreList)
+
+        response.putMap("textScore", textScore)
+        response.putString("status", status)
+        event.putMap("response", response)
+        event.putDouble("channel", _channel!!)
+//      event.putString("filePath", workingFile?.absolutePath)
+        sendEvent(moduleEvents.onSpeechRecognized, event)
+        state = moduleStates.none
+//      workingFile = null
+        transcripts = null
+        emitStateChangeEvent()
+      }  catch (e: Exception) {
+        handleErrorEvent(e)
+      }
     }, 1000)
   }
 
@@ -336,17 +369,16 @@ class VoiceRecognizerModule(reactContext: ReactApplicationContext) : ReactContex
     }
 
     override fun onError(errorCode: Int) {
+      speech?.cancel()
       val errorMessage = String.format("%d/%s", errorCode, getErrorText(errorCode))
       handleErrorEvent(Exception(errorMessage))
     }
 
     override fun onResults(results: Bundle) {
       val matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-//      val scores = results.getFloatArray(SpeechRecognizer.CONFIDENCE_SCORES)
       for (result in matches!!) {
-        transcripts?.pushString(result)
+        if (!result.isNullOrEmpty()) transcripts?.pushString(result)
       }
-      Log.i(TAG, "onResults: $transcripts")
 
 //      outputStream?.close()
 //      mAudioRecord?.stop()
@@ -364,13 +396,6 @@ class VoiceRecognizerModule(reactContext: ReactApplicationContext) : ReactContex
     }
 
     override fun onPartialResults(results: Bundle) {
-//      val matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-//      Log.i(TAG, "onPartialResults: $matches")
-//      if (matches != null) {
-//        for (result in matches) {
-//          transcripts?.pushString(result)
-//        }
-//      }
 
     }
 
@@ -418,7 +443,8 @@ class VoiceRecognizerModule(reactContext: ReactApplicationContext) : ReactContex
 
   private fun handleErrorEvent(throwable: Throwable) {
     throwable.printStackTrace()
-    speech?.stopListening()
+    speech?.destroy()
+    speech = null
     releaseResources()
 
     sendJSErrorEvent(throwable.message)
