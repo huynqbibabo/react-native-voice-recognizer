@@ -185,6 +185,8 @@ class VoiceRecognizerModule(reactContext: ReactApplicationContext) : ReactContex
     mainHandler.post {
       try {
         speech?.cancel()
+        speech?.destroy()
+        speech = null
 //        outputStream?.close()
 //        mAudioRecord?.stop()
 //        mAudioRecord?.release()
