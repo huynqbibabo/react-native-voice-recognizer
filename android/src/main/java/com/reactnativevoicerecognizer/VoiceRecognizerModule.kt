@@ -59,76 +59,77 @@ class VoiceRecognizerModule(reactContext: ReactApplicationContext) : ReactContex
     } else Locale.getDefault().toString()
   }
 
-  private fun startListening(opts: ReadableMap) {
-    if (speech != null) {
-      speech!!.destroy()
-      speech = null
-
-    }
-    speech = if (opts.hasKey("RECOGNIZER_ENGINE")) {
-      when (opts.getString("RECOGNIZER_ENGINE")) {
-        "GOOGLE" -> {
-          SpeechRecognizer.createSpeechRecognizer(
-            reactApplicationContext,
-            ComponentName.unflattenFromString("com.google.android.googlequicksearchbox/com.google.android.voicesearch.serviceapi.GoogleRecognitionService")
-          )
-        }
-        else -> SpeechRecognizer.createSpeechRecognizer(reactApplicationContext)
-      }
-    } else {
-      SpeechRecognizer.createSpeechRecognizer(reactApplicationContext)
-    }
-    speech?.setRecognitionListener(mRecognitionListener)
-
-    val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-
-    // Load the intent with options from JS
-    val iterator = opts.keySetIterator()
-    while (iterator.hasNextKey()) {
-      when (val key = iterator.nextKey()) {
-        "EXTRA_LANGUAGE_MODEL" -> when (opts.getString(key)) {
-          "LANGUAGE_MODEL_FREE_FORM" -> intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-          "LANGUAGE_MODEL_WEB_SEARCH" -> intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_WEB_SEARCH)
-          else -> intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-        }
-        "EXTRA_MAX_RESULTS" -> {
-          val extras = opts.getDouble(key)
-          intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, extras.toInt())
-        }
-        "EXTRA_PARTIAL_RESULTS" -> {
-          intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, opts.getBoolean(key))
-        }
-        "EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS" -> {
-          val extras = opts.getDouble(key)
-          intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, extras.toInt())
-        }
-        "EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS" -> {
-          val extras = opts.getDouble(key)
-          intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, extras.toInt())
-        }
-        "EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS" -> {
-          val extras = opts.getDouble(key)
-          intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, extras.toInt())
-        }
-      }
-    }
-
-    intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, getLocale(opts.getString("locale")))
-    speech?.startListening(intent)
-  }
-
   @ReactMethod
   fun start(channel: Double, textToScore: String, opts: ReadableMap, promise: Promise) {
 
     locale = opts.getString("locale")
-    val mainHandler = Handler(reactApplicationContext!!.mainLooper)
-    if (textToScore.isEmpty()) {
-      promise.reject("1", "Can't score with empty string")
+    val mainHandler = Handler(Looper.getMainLooper())
+    if (state != moduleStates.none) {
+      promise.reject("-1", "Process till running!")
       return
     }
-    mainHandler.post {
-      try {
-        startListening(opts)
+    if (textToScore.isEmpty()) {
+      promise.reject("-1", "Can't score with empty string")
+      return
+    }
+    try {
+      mainHandler.post {
+        if (speech != null) {
+          speech?.destroy()
+          speech = null
+
+        }
+        speech = if (opts.hasKey("RECOGNIZER_ENGINE")) {
+          when (opts.getString("RECOGNIZER_ENGINE")) {
+            "GOOGLE" -> {
+              SpeechRecognizer.createSpeechRecognizer(
+                reactApplicationContext,
+                ComponentName.unflattenFromString("com.google.android.googlequicksearchbox/com.google.android.voicesearch.serviceapi.GoogleRecognitionService")
+              )
+            }
+            else -> SpeechRecognizer.createSpeechRecognizer(reactApplicationContext)
+          }
+        } else {
+          SpeechRecognizer.createSpeechRecognizer(reactApplicationContext)
+        }
+        speech?.setRecognitionListener(mRecognitionListener)
+
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+
+        // Load the intent with options from JS
+        val iterator = opts.keySetIterator()
+        while (iterator.hasNextKey()) {
+          when (val key = iterator.nextKey()) {
+            "EXTRA_LANGUAGE_MODEL" -> when (opts.getString(key)) {
+              "LANGUAGE_MODEL_FREE_FORM" -> intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+              "LANGUAGE_MODEL_WEB_SEARCH" -> intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_WEB_SEARCH)
+              else -> intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            }
+            "EXTRA_MAX_RESULTS" -> {
+              val extras = opts.getDouble(key)
+              intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, extras.toInt())
+            }
+            "EXTRA_PARTIAL_RESULTS" -> {
+              intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, opts.getBoolean(key))
+            }
+            "EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS" -> {
+              val extras = opts.getDouble(key)
+              intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, extras.toInt())
+            }
+            "EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS" -> {
+              val extras = opts.getDouble(key)
+              intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, extras.toInt())
+            }
+            "EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS" -> {
+              val extras = opts.getDouble(key)
+              intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, extras.toInt())
+            }
+          }
+        }
+
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, getLocale(opts.getString("locale")))
+        speech?.startListening(intent)
+
         _channel = channel
         state = moduleStates.recording
         sentence = textToScore
@@ -140,10 +141,10 @@ class VoiceRecognizerModule(reactContext: ReactApplicationContext) : ReactContex
 //        createAudioRecord()
         promise.resolve(true)
         emitStateChangeEvent()
-      } catch (e: Exception) {
-        promise.reject("-1", e.message)
-        handleErrorEvent(e)
       }
+    } catch (e: Exception) {
+      promise.reject("-1", e.message)
+      handleErrorEvent(e)
     }
   }
 
@@ -440,13 +441,15 @@ class VoiceRecognizerModule(reactContext: ReactApplicationContext) : ReactContex
 //    outputStream = null
 //    workingFile?.delete()
 //    workingFile = null
-    state = moduleStates.none
+//    state = moduleStates.none
   }
 
   private fun handleErrorEvent(throwable: Throwable) {
     throwable.printStackTrace()
-    speech?.destroy()
-    speech = null
+    if( speech != null){
+      speech?.destroy()
+      speech = null
+    }
     releaseResources()
 
     sendJSErrorEvent(throwable.message)
