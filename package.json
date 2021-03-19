@@ -1,6 +1,6 @@
 {
   "name": "@bibabovn/react-native-voice-recognizer",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Voice recognizer for react native app",
   "main": "lib/commonjs/index",
   "module": "lib/module/index",
